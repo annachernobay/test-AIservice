@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -21,6 +21,7 @@ class SessionResponse(BaseModel):
 
 class CreateMessageRequest(BaseModel):
     content: str = Field(..., min_length=1, description="Текст повідомлення користувача")
+    model: Optional[str] = Field(default=None, description="Опціональна назва моделі для цього повідомлення")
 
 
 class MessageResponse(BaseModel):

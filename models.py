@@ -1,6 +1,16 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import relationship
 
 from database import Base
@@ -16,7 +26,9 @@ class Session(Base):
     total_cost_usd = Column(Float, default=0.0)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-    messages = relationship("Message", back_populates="session", cascade="all, delete-orphan")
+    messages = relationship(
+        "Message", back_populates="session", cascade="all, delete-orphan"
+    )
 
 
 class Message(Base):
@@ -26,6 +38,8 @@ class Message(Base):
     session_id = Column(String, ForeignKey("sessions.id"), nullable=False)
     role = Column(String, nullable=False)
     content = Column(Text, nullable=False)
+    cost = Column(Float, default=0.0)
+    is_archived = Column(Boolean, default=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     session = relationship("Session", back_populates="messages")

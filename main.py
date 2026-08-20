@@ -42,6 +42,41 @@ def create_session(
     return new_session
 
 
+@app.post("/sessions/{session_id}/reset")
+def reset_session(session_id: str, db: Session = Depends(database.get_db)):
+    session = (
+        db.query(models.Session)
+        .filter(models.Session.id == session_id)
+        .first()
+    )
+    if not session:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "error": "SESSION_NOT_FOUND",
+                "message": f"Сесію з ідентифікатором '{session_id}' не знайдено.",
+            },
+        )
+
+    
+    db.query(models.Message).filter(
+        models.Message.session_id == session_id,
+        models.Message.is_archived == False,
+    ).update({"is_archived": True})
+
+    
+    session.total_prompt_tokens = 0
+    session.total_completion_tokens = 0
+    session.total_cost_usd = 0.0
+
+    db.commit()
+    return {
+        "status": "success",
+        "message": "Контекст сесії успішно скинуто.",
+        "session_id": session_id,
+    }
+
+
 @app.post(
     "/sessions/{session_id}/messages", response_model=schemas.MessageResponse
 )
@@ -64,9 +99,24 @@ def send_message(
             },
         )
 
+    
+    target_model = req.model if req.model else session.model
+
+    if target_model not in pricing.PRICING_CONFIG:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "INVALID_MODEL",
+                "message": f"Модель '{target_model}' не підтримується.",
+            },
+        )
+
     history = (
         db.query(models.Message)
-        .filter(models.Message.session_id == session_id)
+        .filter(
+            models.Message.session_id == session_id,
+            models.Message.is_archived == False,
+        )
         .order_by(models.Message.created_at.asc())
         .all()
     )
@@ -78,7 +128,7 @@ def send_message(
 
     try:
         ai_content, prompt_tokens, completion_tokens = (
-            openai_service.generate_response(session.model, formatted_messages)
+            openai_service.generate_response(target_model, formatted_messages)
         )
     except Exception as e:
         print(f"\n[OPENROUTER ERROR]: {e}\n")
@@ -87,16 +137,17 @@ def send_message(
             content={"error": "EXTERNAL_API_ERROR", "message": str(e)},
         )
 
+    
     cost = pricing.calculate_cost(
-        session.model, prompt_tokens, completion_tokens
+        target_model, prompt_tokens, completion_tokens
     )
 
     try:
         user_msg = models.Message(
-            session_id=session_id, role="user", content=req.content
+            session_id=session_id, role="user", content=req.content, is_archived=False
         )
         assistant_msg = models.Message(
-            session_id=session_id, role="assistant", content=ai_content
+            session_id=session_id, role="assistant", content=ai_content, is_archived=False
         )
 
         db.add(user_msg)
@@ -138,4 +189,6 @@ def get_session(session_id: str, db: Session = Depends(database.get_db)):
                 "message": f"Сесію з ідентифікатором '{session_id}' не знайдено.",
             },
         )
+
+    session.messages = [msg for msg in session.messages if not msg.is_archived]
     return session
