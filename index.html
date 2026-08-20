@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Chat Tester</title>
+  <style>
+    body { font-family: sans-serif; max-width: 600px; margin: 20px auto; padding: 10px; }
+    #chat { border: 1px solid #ccc; height: 350px; overflow-y: scroll; padding: 10px; margin-bottom: 10px; }
+    .msg { margin: 5px 0; padding: 8px; border-radius: 5px; }
+    .user { background: #e3f2fd; text-align: right; }
+    .assistant { background: #f1f8e9; text-align: left; }
+  </style>
+</head>
+<body>
+  <h3>AI Chat Tester</h3>
+  <button onclick="createSession()">Створити нову сесію</button>
+  <p>Session ID: <span id="sessionId">не створено</span></p>
+
+  <div id="chat"></div>
+  <input type="text" id="userInput" style="width: 75%;" placeholder="Введіть повідомлення...">
+  <button onclick="sendMessage()">Надіслати</button>
+
+  <script>
+    let activeSessionId = null;
+
+    async function createSession() {
+      const res = await fetch('/sessions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ model: 'gpt-4o-mini' })
+      });
+      const data = await res.json();
+      activeSessionId = data.id;
+      document.getElementById('sessionId').innerText = activeSessionId;
+      document.getElementById('chat').innerHTML = '';
+    }
+
+    async function sendMessage() {
+      if (!activeSessionId) return alert('Спочатку створіть сесію!');
+      const text = document.getElementById('userInput').value;
+      if (!text) return;
+
+      appendMsg('user', text);
+      document.getElementById('userInput').value = '';
+
+      const res = await fetch(`/sessions/${activeSessionId}/messages`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ content: text })
+      });
+      const data = await res.json();
+      appendMsg('assistant', data.content);
+    }
+
+    function appendMsg(role, text) {
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      div.innerText = text;
+      document.getElementById('chat').appendChild(div);
+    }
+  </script>
+</body>
+</html>
